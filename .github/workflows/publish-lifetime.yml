@@ -1,0 +1,39 @@
+name: Publish Dietory Lifetime 5.5
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-lifetime.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Download verified installer artifact
+        env:
+          SOURCE_URL: "https://sdmntprnortheu.oaiusercontent.com/files/00000000-988c-81f4-a9ee-70226872c59d/raw?se=2026-11-22T12%3A58%3A33Z&sp=r&sv=2026-06-06&sr=b&scid=24fa7d29-4165-5c3e-91c6-fa27c1340ec2&skoid=a0b9f82a-c86e-4064-a822-2aa38890bb37&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-11-22T04%3A56%3A18Z&ske=2026-11-23T04%3A56%3A18Z&sks=b&skv=2026-06-06&sig=iW/RkYJrtxWYbJRfwisOio1/4/5LFliwFKmqWI58njA%3D"
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 4 --retry-delay 3 --max-time 900 --output /tmp/dietory.zip "$SOURCE_URL"
+          mkdir -p delivery release
+          unzip -q /tmp/dietory.zip -d delivery
+          ls -alh delivery
+          test -f delivery/Dietory-5.5.0-Lifetime-Setup.exe
+          test -f delivery/SHA256.txt
+          (cd delivery && sha256sum --check SHA256.txt)
+          cp delivery/Dietory-5.5.0-Lifetime-Setup.exe release/
+          (cd release && sha256sum Dietory-5.5.0-Lifetime-Setup.exe > SHA256SUMS.txt)
+      - name: Publish installer as public GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="v5.5.0-lifetime"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" release/* --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$tag" release/* --repo "$GITHUB_REPOSITORY" --title "Dietory 5.5.0 Lifetime for Windows" --notes "Official standalone offline lifetime edition of Dietory for Windows. Download Dietory-5.5.0-Lifetime-Setup.exe to install. No subscription or activation code is needed. SHA256SUMS.txt is included for integrity verification." --latest
+          fi
